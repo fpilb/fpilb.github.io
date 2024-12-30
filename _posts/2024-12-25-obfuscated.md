@@ -2,13 +2,8 @@
 layout: post
 category: CTF
 ---
-
-In this challenge we are dealing with malicious doc file so probably we will be dealing with some VBA scripts. But let's not get ahead of ourselves. 
-
 The assignment is as follows:
 During your shift as a SOC analyst, the enterprise EDR alerted a suspicious behavior from an end-user machine. The user indicated that he received a recent email with a DOC file from an unknown sender and passed the document for you to analyze.
-
-First question is about hashing so we will skip that one 
 
 ### Table of contents
 - [Macros in stream](#macros-in-streams)
@@ -47,8 +42,7 @@ First question is about hashing so we will skip that one
  20:    133755 'WordDocument'
 ```
 
-To see all macros in the ole streams we can simply use `Oledump` which enables us to quickly discover possible culprits in our investigation thanks to the indicators next to the stream number. I have provided an overview of all possible indicators bellow:
-
+To see all macros in the ole streams we can use `Oledump` which enables us to quickly discover possible culprits in our investigation thanks to the indicators next to the stream number. Here is an overview of all possible indicators bellow:
 
 - M: Macro (attributes and code)
 - m: macro (attributes without code)
@@ -349,7 +343,7 @@ As everybody already knows `eval()` functions are evil so we always look for the
 
 We can simply google how to run jscript code in command line and the first answer is the right one it is `cscript.exe` 
 
-Q:What is the name of the first function defined in the deobfuscated code?
+	Q:What is the name of the first function defined in the deobfuscated code?
 
 Final question - to reveal the encrypted code this malware is trying to execute we can replace the eval with the WScript.Echo as I mentioned earlier and see that the first defined function is - `UspD`
 
@@ -360,4 +354,4 @@ This concludes the full challenge but as you might have guessed - there is more.
 
 We will not be covering the full analysis in this post but there will be part 2 - starting right here where we left off. 
 
-For anyone interested here is the raw stage 3 js file so you can explore on your own in mean time 
+For anyone interested [here is the raw stage 3 js file](https://github.com/fpilb/fpilb.github.io/blob/master/projects/CTF/76-obfuscated/stage3.js.evil) so you can explore on your own in mean time 

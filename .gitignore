@@ -1,3 +1,4 @@
+*.backup
 *.gem
 .bundle
 .jekyll-cache
